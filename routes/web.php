@@ -27,7 +27,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/lost-documents', [LostDocumentController::class, 'store'])->name('lost-documents.store');
     Route::get('/lost-documents/{lost_document}/edit', [LostDocumentController::class, 'edit'])->name('lost-documents.edit'); // Optional if using modal
     Route::put('/lost-documents/{lost_document}', [LostDocumentController::class, 'update'])->name('lost-documents.update');
-    Route::delete('/lost-documents/{lost_document}', [LostDocumentController::class, 'destroy'])->name('lost-documents.destroy');
+    Route::delete('/lost-documents/{id}', [LostDocumentController::class, 'destroy'])->name('lost-documents.destroy');
 
     Route::get('/lost-documents/ai', [LostDocumentController::class, 'indexAI'])->name('documents.index-ai');
     Route::post('/lost-documents/process', [LostDocumentController::class, 'processAI'])->name('lost.process');

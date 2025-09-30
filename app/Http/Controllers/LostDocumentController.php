@@ -2,6 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\AdminMatchedIdMail;
+use App\Mail\FoundIdMatchedMail;
+use App\Mail\FoundIdReportedMail;
+use App\Mail\IdFoundNotificationMail;
+use App\Mail\LostIdConfirmationMail;
+use App\Mail\LostIdReportedMail;
 use App\Models\ExtractedDocument;
 use App\Models\LostDocument;
 use App\Services\OCRService;
@@ -15,6 +21,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use thiagoalessio\TesseractOCR\TesseractOCR;
 use Google\Cloud\Vision\V1\ImageAnnotatorClient;
+use Illuminate\Support\Facades\Mail;
 use OpenAI\Laravel\Facades\OpenAI;
 
 class LostDocumentController extends Controller
@@ -54,13 +61,11 @@ class LostDocumentController extends Controller
 
     public function show(LostDocument $lostDoc)
     {
-        $this->authorize('view', $lostDoc);
         return view('documents.losts.show', compact('lostDoc'));
     }
 
     public function edit(LostDocument $lostDoc)
     {
-        $this->authorize('update', $lostDoc);
         return view('lost_ids.edit', compact('lostDoc'));
     }
 
@@ -86,10 +91,9 @@ class LostDocumentController extends Controller
         return redirect()->route('lost-documents.index')->with('success', 'Lost ID updated.');
     }
 
-    public function destroy(LostDocument $lostDoc)
+    public function destroy($id)
     {
-        $this->authorize('delete', $lostDoc);
-        Storage::disk('public')->delete($lostDoc->image);
+        $lostDoc = ExtractedDocument::findOrFail($id);
         $lostDoc->delete();
 
         return back()->with('success', 'Lost ID deleted.');
@@ -100,16 +104,19 @@ class LostDocumentController extends Controller
     {
         $request->validate([
             'document' => 'required|image|max:4096',
+            'type' => 'required|in:lost,found', // specify if it's lost or found
         ]);
 
+        $type = $request->input('type'); // lost or found
+
         // Save file
-        $path = $request->file('document')->store('lost_documents', 'public');
+        $path = $request->file('document')->store('documents', 'public');
         $filePath = storage_path('app/public/' . $path);
 
         // Encode image to Base64
         $base64Image = base64_encode(file_get_contents($filePath));
 
-        // Send to OpenAI using base64
+        // Send to OpenAI for extraction
         $result = OpenAI::chat()->create([
             'model' => 'gpt-4o-mini',
             'messages' => [
@@ -130,27 +137,50 @@ class LostDocumentController extends Controller
         ]);
 
         $json = $result['choices'][0]['message']['content'];
-
-        // Try to extract JSON safely
         preg_match('/\{.*\}/s', $json, $matches);
-        $cleanJson = $matches[0] ?? '{}';
+        $data = json_decode($matches[0] ?? '{}', true);
 
-        $data = json_decode($cleanJson, true);
-
+        // Format DOB
         $dob = null;
         if (!empty($data['dob'])) {
             try {
                 $dob = Carbon::createFromFormat('d/m/Y', $data['dob'])->format('Y-m-d');
             } catch (\Exception $e) {
-                // fallback if OCR extracts in another format
                 $dob = null;
             }
         }
 
-        // 🔍 Check if ID number already exists
+        // Check if ID already exists
         $existingDoc = ExtractedDocument::where('id_number', $data['id_number'] ?? '')->first();
 
         if ($existingDoc) {
+            if ($type === 'found' && $existingDoc->status === 'lost') {
+                // ID was reported lost → FOUND match
+                $document = ExtractedDocument::create([
+                    'user_id' => auth()->id(),
+                    'names' => $data['names'] ?? '',
+                    'dob' => $dob,
+                    'sex' => $data['sex'] ?? '',
+                    'place_of_issue' => $data['place_of_issue'] ?? '',
+                    'id_number' => $data['id_number'] ?? '',
+                    'file_path' => $path,
+                    'status' => 'matched',
+                ]);
+
+                // Notify both parties
+                Mail::to($existingDoc->user->email)->send(new IdFoundNotificationMail($document, $existingDoc)); // User who lost
+                Mail::to($document->user->email)->send(new FoundIdMatchedMail($existingDoc, $document)); // User who found
+                Mail::to('kabosierik@gmail.com')->send(new AdminMatchedIdMail($existingDoc, $document));
+
+                return view('documents.matched', [
+                    'file' => asset('storage/' . $path),
+                    'extracted' => $json,
+                    'document' => $document,
+                    'existing' => $existingDoc,
+                ]);
+            }
+
+            // ID already exists (lost or found) → just show existing
             return view('documents.exists', [
                 'file' => asset('storage/' . $path),
                 'extracted' => $json,
@@ -158,16 +188,25 @@ class LostDocumentController extends Controller
             ]);
         }
 
-        // Store extracted data in DB
+        // Store new document
         $document = ExtractedDocument::create([
+            'user_id' => auth()->id(),
             'names' => $data['names'] ?? '',
-            'dob' => $data['dob'] ?? null,
+            'dob' => $dob,
             'sex' => $data['sex'] ?? '',
             'place_of_issue' => $data['place_of_issue'] ?? '',
             'id_number' => $data['id_number'] ?? '',
             'file_path' => $path,
-            'status' => 'new',
+            'status' => $type === 'lost' ? 'lost' : 'found',
         ]);
+
+        // Notify users/admin
+        if ($type === 'lost') {
+            Mail::to('kabosierik@gmail.com')->send(new LostIdReportedMail($document));
+            Mail::to($document->user->email)->send(new LostIdConfirmationMail($document));
+        } else {
+            Mail::to('kabosierik@gmail.com')->send(new FoundIdReportedMail($document));
+        }
 
         return view('documents.result', [
             'file' => asset('storage/' . $path),
@@ -175,6 +214,7 @@ class LostDocumentController extends Controller
             'document' => $document
         ]);
     }
+
 
 
     public function indexAI()

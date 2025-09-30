@@ -71,6 +71,9 @@
         <a href="{{ route('documents.upload') }}" class="btn btn-lg btn-primary">
             <i class="bi bi-upload"></i> Upload Another Document
         </a>
+        <a href="{{ route('dashboard') }}" class="btn btn-lg btn-primary">
+            <i class="bi bi-upload"></i> Dashboard
+        </a>
     </div>
 </div>
 @endsection

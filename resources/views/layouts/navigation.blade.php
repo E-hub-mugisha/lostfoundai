@@ -215,6 +215,14 @@
                                         <form action="{{ route('lost.process') }}" method="POST" enctype="multipart/form-data">
                                             @csrf
                                             <div class="mb-3">
+                                                <label for="type" class="form-label">Type</label>
+                                                <select name="type" id="type" class="form-select">
+                                                    <option value="">-- select type --</option>
+                                                    <option value="lost">Lost</option>
+                                                    <option value="found">Found</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
                                                 <label class="form-label" for="image">Upload Image</label>
                                                 <input type="file" class="form-control" id="document" name="document"
                                                     accept="image/*">

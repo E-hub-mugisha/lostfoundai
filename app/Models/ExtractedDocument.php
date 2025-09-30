@@ -7,6 +7,18 @@ use Illuminate\Database\Eloquent\Model;
 class ExtractedDocument extends Model
 {
     protected $fillable = [
-        'names', 'dob', 'sex', 'place_of_issue', 'id_number', 'file_path', 'status'
+        'names',
+        'dob',
+        'sex',
+        'place_of_issue',
+        'id_number',
+        'file_path',
+        'status',
+        'user_id'
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

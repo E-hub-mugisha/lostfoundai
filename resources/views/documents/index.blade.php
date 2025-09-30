@@ -79,6 +79,7 @@
                 <div class="modal-body">
                     <form action="{{ route('lost.process') }}" method="POST" enctype="multipart/form-data">
                         @csrf
+                        <input type="text" name="type" class="form-control" value="lost" required>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Upload Scanned image</label>
