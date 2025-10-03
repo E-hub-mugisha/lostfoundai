@@ -68,12 +68,15 @@
 
     <!-- Action Button -->
     <div class="text-center mt-4">
-        <a href="{{ route('documents.upload') }}" class="btn btn-lg btn-primary">
-            <i class="bi bi-upload"></i> Upload Another Document
+        @if($document->status === 'lost')
+        <a href="{{ route('documents.index') }}" class="btn btn-lg btn-primary">
+            <i class="bi bi-upload"></i> Lost Documents list
         </a>
-        <a href="{{ route('dashboard') }}" class="btn btn-lg btn-primary">
-            <i class="bi bi-upload"></i> Dashboard
+        @else
+        <a href="{{ route('found_documents.index') }}" class="btn btn-lg btn-primary">
+            <i class="bi bi-upload"></i> Found Documents list
         </a>
+        @endif
     </div>
 </div>
 @endsection
